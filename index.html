@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kawaii Kanji Animator ✨</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- WanaKana voor Romaji -> Kana conversie -->
+    <script src="https://unpkg.com/wanakana"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --sakura: #ffb7c5;
+            --magic-purple: #9d72ff;
+        }
+
+        body {
+            font-family: 'Fredoka', 'Noto Sans JP', sans-serif;
+            background: linear-gradient(135deg, #fce4ec 0%, #e3f2fd 100%);
+            min-height: 100vh;
+        }
+
+        .kawaii-card {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(5px);
+            border: 3px solid white;
+            box-shadow: 0 10px 25px rgba(255, 183, 197, 0.3);
+            border-radius: 2rem;
+            transition: transform 0.3s ease;
+        }
+
+        .kawaii-card:hover { transform: translateY(-5px); }
+
+        .stroke-path {
+            fill: none;
+            stroke: var(--magic-purple);
+            stroke-width: 4;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            stroke-dasharray: 1000;
+            stroke-dashoffset: 1000;
+        }
+
+        @keyframes draw { to { stroke-dashoffset: 0; } }
+        @keyframes float { 
+            0%, 100% { transform: translateY(0px); } 
+            50% { transform: translateY(-10px); } 
+        }
+
+        .floating { animation: float 4s ease-in-out infinite; }
+
+        .suggestion-chip {
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        .suggestion-chip:hover {
+            transform: scale(1.1);
+            background-color: #ffeff2;
+            border-color: var(--sakura);
+        }
+
+        .manga-container {
+            width: 280px; height: 280px;
+            border-radius: 1.5rem;
+            overflow: hidden;
+            border: 4px solid white;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+            background: white;
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        .shodo-composition {
+            position: relative;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            width: 100%; height: 100%;
+            background-color: #fffafb;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center p-4 md:p-8">
+
+    <div class="max-w-4xl w-full bg-white/70 backdrop-blur-md rounded-[3rem] shadow-2xl p-8 md:p-12 border-4 border-white relative overflow-hidden">
+        <header class="text-center mb-10">
+            <h1 class="text-5xl font-black text-pink-500 tracking-tighter floating">
+                漢字 Kanji Animator ✨
+            </h1>
+            <p class="text-indigo-400 mt-2 font-semibold text-lg italic">
+                Typ in Romaji en kies de juiste Kanji!
+            </p>
+            <!-- Copyright verplaatst naar de header -->
+            <div class="text-[10px] text-pink-300 font-bold uppercase tracking-[0.2em] opacity-80 mt-4">
+                © w.oostindier@gemini 2026
+            </div>
+        </header>
+
+        <div class="flex flex-col gap-2 mb-12 relative">
+            <!-- Kanji Suggestie Balk -->
+            <div id="suggestionBox" class="flex flex-wrap gap-2 mb-2 min-h-[40px] justify-center px-4">
+                <!-- Suggesties verschijnen hier live -->
+            </div>
+
+            <div class="flex flex-col sm:flex-row gap-4">
+                <div class="relative flex-1">
+                    <input 
+                        type="text" 
+                        id="kanjiInput" 
+                        placeholder="Typ bijv. 'sensei'" 
+                        class="w-full px-8 py-5 bg-white border-3 border-pink-100 rounded-3xl focus:border-pink-300 focus:ring-8 focus:ring-pink-50 focus:outline-none text-3xl text-center transition-all shadow-inner"
+                    >
+                </div>
+                <button 
+                    onclick="processInput()"
+                    class="bg-gradient-to-r from-pink-400 to-rose-300 font-black text-xl py-5 px-12 text-white rounded-3xl transition-all shadow-xl active:scale-95 hover:scale-105"
+                >
+                    Animeer! 🌸
+                </button>
+            </div>
+            
+            <!-- Instellingen menu -->
+            <div class="flex flex-wrap items-center justify-center gap-6 mt-6">
+                <div class="flex items-center gap-2">
+                    <label for="dictionarySelect" class="text-xs font-black text-purple-400 uppercase tracking-widest">Woordenboek:</label>
+                    <select id="dictionarySelect" onchange="updateJishoLink(); refreshDictionaryLinks();" class="bg-white border-2 border-pink-100 rounded-xl px-4 py-2 text-pink-500 font-bold focus:outline-none focus:border-pink-300">
+                        <option value="jisho">Jisho.org (Standaard)</option>
+                        <option value="tangorin">Tangorin.com (Lijsten)</option>
+                        <option value="kanshudo">Kanshudo (Interactief)</option>
+                        <option value="wanikani">WaniKani (Alleen losse Kanji)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Externe Link (Hoofdlink) -->
+        <div id="jishoLinkContainer" class="hidden mb-8 flex justify-center">
+            <a id="jishoMainLink" href="#" target="_blank" class="flex items-center gap-3 px-8 py-4 bg-white border-2 border-purple-200 text-purple-600 rounded-2xl font-black hover:bg-purple-50 transition-all shadow-sm">
+                <span class="text-xl">📖</span>
+                <span id="dictionaryLinkText">Bekijk op Jisho</span>
+            </a>
+        </div>
+
+        <div id="displayArea" class="flex flex-wrap justify-center gap-8 min-h-[350px] items-center">
+             <div class="flex flex-col items-center text-pink-400">
+                <div class="text-4xl font-bold mb-6">がんばって!</div>
+                <div class="manga-container">
+                    <div id="fallbackGraphic" class="shodo-composition">
+                        <div class="text-[90px] font-serif text-gray-800">漢字</div>
+                        <div class="mt-4 bg-pink-50 px-4 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest">Penseel klaargelegd ✨</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-16 bg-white/50 rounded-[2.5rem] p-8 border-2 border-white shadow-inner text-center">
+            <label class="block text-sm font-black text-purple-400 mb-3 uppercase tracking-widest text-center">Teken-snelheid ⚡</label>
+            <input type="range" id="speedSlider" min="0.2" max="3" step="0.2" value="1.2" class="w-full h-4 bg-pink-100 rounded-full appearance-none cursor-pointer accent-pink-400 border-2 border-white mb-2">
+        </div>
+    </div>
+
+    <footer class="mt-8 text-pink-400 text-xs font-bold bg-white/50 px-6 py-2 rounded-full border border-white">
+        Veilig voor GitHub Pages & Geen API nodig 🎀
+    </footer>
+
+    <script>
+        const inputField = document.getElementById('kanjiInput');
+        const suggestionBox = document.getElementById('suggestionBox');
+        let globalStrokeCount = 0;
+
+        // WanaKana koppelen voor Romaji -> Hiragana conversie
+        wanakana.bind(inputField);
+
+        // Luisteren naar typen voor suggesties
+        inputField.addEventListener('input', async () => {
+            const val = inputField.value;
+            updateJishoLink();
+            
+            if (val.length > 0) {
+                await fetchSuggestions(val);
+            } else {
+                suggestionBox.innerHTML = '';
+            }
+        });
+
+        async function fetchSuggestions(text) {
+            const url = `https://inputtools.google.com/request?itc=ja-t-i0-und&num=10&cp=0&cs=1&ie=utf-8&oe=utf-8&app=jsapi&text=${encodeURIComponent(text)}`;
+            
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (data[0] === "SUCCESS") {
+                    const results = data[1][0][1];
+                    renderSuggestions(results);
+                }
+            } catch (e) {
+                console.error("Kon geen suggesties ophalen.");
+            }
+        }
+
+        function renderSuggestions(list) {
+            suggestionBox.innerHTML = '';
+            list.forEach(item => {
+                const btn = document.createElement('button');
+                btn.className = "suggestion-chip px-4 py-2 bg-white border-2 border-pink-100 rounded-2xl text-pink-600 font-bold shadow-sm hover:border-pink-300";
+                btn.innerText = item;
+                btn.onclick = () => {
+                    inputField.value = item;
+                    suggestionBox.innerHTML = '';
+                    updateJishoLink();
+                    processInput();
+                };
+                suggestionBox.appendChild(btn);
+            });
+        }
+
+        // Hulpfunctie om de juiste woordenboek URL te bouwen
+        function getDictionaryUrl(term, dictType) {
+            switch(dictType) {
+                case "tangorin":
+                    return `https://tangorin.com/kanji?search=${encodeURIComponent(term)}`;
+                case "kanshudo":
+                    return `https://www.kanshudo.com/search?q=${encodeURIComponent(term)}`;
+                case "wanikani":
+                    const char = [...term][0];
+                    return `https://www.wanikani.com/kanji/${encodeURIComponent(char)}`;
+                default:
+                    return `https://jisho.org/search/${encodeURIComponent(term)}`;
+            }
+        }
+
+        function updateJishoLink() {
+            const input = inputField.value.trim();
+            const dict = document.getElementById('dictionarySelect').value;
+            const jishoContainer = document.getElementById('jishoLinkContainer');
+            const jishoMainLink = document.getElementById('jishoMainLink');
+            const linkText = document.getElementById('dictionaryLinkText');
+            
+            if (!input) {
+                jishoContainer.classList.add('hidden');
+                return;
+            }
+
+            const dictNames = { jisho: "Jisho.org", tangorin: "Tangorin", kanshudo: "Kanshudo", wanikani: "WaniKani" };
+            jishoMainLink.href = getDictionaryUrl(input, dict);
+            linkText.innerText = `Bekijk op ${dictNames[dict]}`;
+            jishoContainer.classList.remove('hidden');
+        }
+
+        function refreshDictionaryLinks() {
+            const dict = document.getElementById('dictionarySelect').value;
+            const dictNames = { jisho: "Jisho", tangorin: "Tangorin", kanshudo: "Kanshudo", wanikani: "WaniKani" };
+            
+            document.querySelectorAll('.mini-dict-link').forEach(link => {
+                const char = link.getAttribute('data-char');
+                link.href = getDictionaryUrl(char, dict);
+                link.querySelector('.dict-name').innerText = dictNames[dict];
+            });
+        }
+
+        async function processInput() {
+            const input = inputField.value.trim();
+            const displayArea = document.getElementById('displayArea');
+            if (!input) return;
+
+            displayArea.innerHTML = '<div class="flex flex-col items-center"><div class="animate-spin rounded-full h-12 w-12 border-b-4 border-pink-500 mb-4"></div><p class="text-purple-400 font-black">Tekenen...</p></div>';
+
+            const characters = [...input];
+            globalStrokeCount = 0; 
+            const kanjiData = [];
+            
+            for (const char of characters) {
+                const data = await fetchKanjiSVG(char);
+                if (data) kanjiData.push({ char, svgDoc: data });
+            }
+
+            displayArea.innerHTML = '';
+            if (kanjiData.length === 0) {
+                displayArea.innerHTML = '<p class="text-pink-500 font-black p-8 text-center bg-white rounded-3xl">Geen teken-data gevonden voor dit karakter.</p>';
+                return;
+            }
+
+            kanjiData.forEach((item) => renderKanjiCard(item.char, item.svgDoc));
+        }
+
+        async function fetchKanjiSVG(char) {
+            const hexCode = char.charCodeAt(0).toString(16).padStart(5, '0');
+            const url = `https://raw.githubusercontent.com/KanjiVG/kanjivg/master/kanji/${hexCode}.svg`;
+            try {
+                const response = await fetch(url);
+                if (!response.ok) return null;
+                const svgText = await response.text();
+                return new DOMParser().parseFromString(svgText, "image/svg+xml");
+            } catch (e) { return null; }
+        }
+
+        function renderKanjiCard(char, xmlDoc) {
+            const displayArea = document.getElementById('displayArea');
+            const dict = document.getElementById('dictionarySelect').value;
+            const dictNames = { jisho: "Jisho", tangorin: "Tangorin", kanshudo: "Kanshudo", wanikani: "WaniKani" };
+            
+            const container = document.createElement('div');
+            container.className = "kawaii-card p-8 flex flex-col items-center relative";
+            
+            const svgNS = "http://www.w3.org/2000/svg";
+            const newSvg = document.createElementNS(svgNS, "svg");
+            newSvg.setAttribute("viewBox", "0 0 109 109");
+            newSvg.setAttribute("class", "w-44 h-44");
+
+            newSvg.innerHTML = `
+                <line x1="0" y1="54.5" x2="109" y2="54.5" stroke="#ffb7c5" stroke-dasharray="5" opacity="0.4" />
+                <line x1="54.5" y1="0" x2="54.5" y2="109" stroke="#ffb7c5" stroke-dasharray="5" opacity="0.4" />
+                <rect x="0" y="0" width="109" height="109" fill="none" stroke="#ffb7c5" stroke-width="1" opacity="0.3" rx="10" />
+            `;
+
+            const paths = xmlDoc.querySelectorAll('path');
+            const speed = parseFloat(document.getElementById('speedSlider').value);
+            
+            paths.forEach((p, i) => {
+                const path = document.createElementNS(svgNS, "path");
+                path.setAttribute("d", p.getAttribute('d'));
+                path.setAttribute("class", "stroke-path");
+                
+                const duration = 0.7 / speed;
+                const delay = globalStrokeCount * (0.85 / speed);
+                path.style.animation = `draw ${duration}s ${delay}s forwards ease-in-out`;
+                newSvg.appendChild(path);
+                globalStrokeCount++;
+            });
+
+            container.appendChild(newSvg);
+            
+            const label = document.createElement('div');
+            label.className = "mt-4 text-5xl font-black text-pink-500 drop-shadow-sm";
+            label.innerText = char;
+            container.appendChild(label);
+
+            const dictLink = document.createElement('a');
+            dictLink.href = getDictionaryUrl(char, dict);
+            dictLink.target = "_blank";
+            dictLink.className = "mini-dict-link mt-4 flex items-center gap-2 px-4 py-2 bg-purple-50 hover:bg-purple-100 text-purple-600 rounded-xl text-xs font-black transition-all border border-purple-100 shadow-sm active:scale-95";
+            dictLink.setAttribute('data-char', char);
+            dictLink.innerHTML = `
+                <span>📖</span>
+                <span class="dict-name">${dictNames[dict]}</span>
+            `;
+            container.appendChild(dictLink);
+
+            displayArea.appendChild(container);
+        }
+
+        inputField.addEventListener('keypress', (e) => { if (e.key === 'Enter') processInput(); });
+    </script>
+</body>
+</html>
